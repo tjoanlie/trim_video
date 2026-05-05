@@ -17,6 +17,7 @@ from playercontrols import PlayerControls
 from videowidget import VideoWidget
 import subprocess
 import os
+from pathlib import Path
 
 MP4 = 'video/mp4'
 
@@ -71,6 +72,7 @@ class Player(QWidget):
         super().__init__(parent)
         self.lastDir = None
         self.currentVideo = ""
+        self.currentVideoDir = ""
         self.timeTrimList = []
         self.m_statusInfo = ""
         self.m_mediaDevices = QMediaDevices()
@@ -219,6 +221,7 @@ class Player(QWidget):
             #fileName = fileDialog.selectedUrls()[0].toString().split('/')
             #self.currentVideo = fileName[len(fileName)-1]
             self.currentVideo = fileName
+            self.currentVideoDir = Path(fileDialog.selectedUrls()[0].toString().replace("file://", "")).parent
             self.m_videoFile.setText(self.currentVideo)
             self.openUrl(fileDialog.selectedUrls()[0])
 
@@ -322,7 +325,7 @@ class Player(QWidget):
             print(f"ERROR - incomplete trim windows")
             # TODO must create a pop up window to show the error
         else:
-            self.m_player.stop
+            self.m_player.stop()
             file_handle = open('join.list', 'w')
             for win in range(len(self.timeTrimList)//2):
                 stime = second2time(self.timeTrimList.pop(0))
@@ -334,7 +337,8 @@ class Player(QWidget):
             file_handle.close()
             file_name_arr = self.currentVideo.split('/')
             file_name = file_name_arr[len(file_name_arr)-1]
-            os.system(f"ffmpeg -f concat -i join.list -c copy join_{file_name}")
+            out_file = f"{self.currentVideoDir}/join_{file_name}"
+            os.system(f"ffmpeg -f concat -i join.list -c copy {out_file}")
             os.system("rm trim_window_*.mp4")
             self.timeTrimList = []
             self.m_trimList.setText(list2text(self.timeTrimList))
