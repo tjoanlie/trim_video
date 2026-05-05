@@ -15,6 +15,8 @@ from PySide6.QtCore import QDir, QLocale, QStandardPaths, QTime, Qt, Signal, Slo
 
 from playercontrols import PlayerControls
 from videowidget import VideoWidget
+import subprocess
+import os
 
 MP4 = 'video/mp4'
 
@@ -68,7 +70,7 @@ class Player(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.lastDir = None
-        self.currentFile = ""
+        self.currentVideo = ""
         self.timeTrimList = []
         self.m_statusInfo = ""
         self.m_mediaDevices = QMediaDevices()
@@ -137,7 +139,7 @@ class Player(QWidget):
         self.controls.startTrim.connect(self.startTrimClicked)
         self.controls.endTrim.connect(self.endTrimClicked)
         self.controls.forward.connect(self.forwardClicked)
-        self.controls.fastForward.connect(self.fastForwardClicked)
+        self.controls.runTrim.connect(self.runTrimClicked)
         self.controls.changeVolume.connect(self.m_audioOutput.setVolume)
         self.controls.changeMuting.connect(self.m_audioOutput.setMuted)
         self.controls.changeRate.connect(self.m_player.setPlaybackRate)
@@ -156,7 +158,7 @@ class Player(QWidget):
         tracksLayout = QGridLayout()
 
         tracksLayout.addWidget(QLabel("Video File:"), 0, 0)
-        self.m_videoFile = QLabel(self.currentFile)
+        self.m_videoFile = QLabel(self.currentVideo)
         tracksLayout.addWidget(self.m_videoFile, 0, 1)
 
         self.m_trimList = QLabel(self)
@@ -181,7 +183,7 @@ class Player(QWidget):
             controls.setEnabled(False)
             openButton.setEnabled(False)
             self.m_forwardButton.setEnabled(False)
-            self.m_fastForwardButton.setEnabled(False)
+            self.m_runTrimButton.setEnabled(False)
             self.m_startTrimButton.setEnabled(False)
             self.m_endTrimButton.setEnabled(False)
             self.m_backwardButton.setEnabled(False)
@@ -212,10 +214,12 @@ class Player(QWidget):
         fileDialog.setMimeTypeFilters(getSupportedMimeTypes())
         fileDialog.selectMimeTypeFilter(MP4)
         if fileDialog.exec() == QDialog.DialogCode.Accepted:
-            fileName = fileDialog.selectedUrls()[0].toString().split('/')
+            fileName = fileDialog.selectedUrls()[0].toString().replace("file://","")
             self.lastDir = fileDialog.directory()
-            self.currentFile = fileName[len(fileName)-1]
-            self.m_videoFile.setText(self.currentFile)
+            #fileName = fileDialog.selectedUrls()[0].toString().split('/')
+            #self.currentVideo = fileName[len(fileName)-1]
+            self.currentVideo = fileName
+            self.m_videoFile.setText(self.currentVideo)
             self.openUrl(fileDialog.selectedUrls()[0])
 
     def openUrl(self, url):
@@ -311,10 +315,30 @@ class Player(QWidget):
         current_pos = self.m_player.position()
         self.m_player.setPosition(current_pos+5000)
 
+
     @Slot()
-    def fastForwardClicked(self):
-        current_pos = self.m_player.position()
-        self.m_player.setPosition(current_pos+30000)
+    def runTrimClicked(self):
+        if len(self.timeTrimList) % 2 == 1:
+            print(f"ERROR - incomplete trim windows")
+            # TODO must create a pop up window to show the error
+        else:
+            self.m_player.stop
+            file_handle = open('join.list', 'w')
+            for win in range(len(self.timeTrimList)//2):
+                stime = second2time(self.timeTrimList.pop(0))
+                etime = second2time(self.timeTrimList.pop(0))
+                trim_file = f"trim_window_{win}.mp4"
+                cmd_line = f"ffmpeg -i {self.currentVideo} -ss {stime} -to {etime} -c copy {trim_file}"
+                file_handle.write(f"file {trim_file}\n")
+                os.system(cmd_line)
+            file_handle.close()
+            file_name_arr = self.currentVideo.split('/')
+            file_name = file_name_arr[len(file_name_arr)-1]
+            os.system(f"ffmpeg -f concat -i join.list -c copy join_{file_name}")
+            os.system("rm trim_window_*.mp4")
+            self.timeTrimList = []
+            self.m_trimList.setText(list2text(self.timeTrimList))
+
 
     @Slot(int)
     def seek(self, mseconds):
@@ -360,11 +384,11 @@ class Player(QWidget):
     @Slot(bool)
     def videoAvailableChanged(self, available):
         if not available:
-            self.m_videoWidget.fullScreenChanged.disconnect(self.m_fastForwardButton.setChecked)
+            self.m_videoWidget.fullScreenChanged.disconnect(self.m_runTrimButton.setChecked)
             self.m_videoWidget.setFullScreen(False)
         else:
-            self.m_videoWidget.fullScreenChanged.connect(self.m_fastForwardButton.setChecked)
-            if self.m_fastForwardButton.isChecked():
+            self.m_videoWidget.fullScreenChanged.connect(self.m_runTrimButton.setChecked)
+            if self.m_runTrimButton.isChecked():
                 self.m_videoWidget.setFullScreen(True)
 
     @Slot()

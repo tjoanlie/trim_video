@@ -18,7 +18,7 @@ class PlayerControls(QWidget):
     backward = Signal()
     undoTrimEntry = Signal()
     forward = Signal()
-    fastForward = Signal()
+    runTrim = Signal()
     startTrim = Signal()        # TODO make a single button alternate start/stop
     endTrim = Signal()
     changeVolume = Signal(float)
@@ -91,11 +91,11 @@ class PlayerControls(QWidget):
         self.m_undoTrimEntryButton.clicked.connect(self.undoTrimEntryClicked)
 
         cut_icon = QIcon("./Icons/edit-cut.png")
-        self.m_fastForwardButton = QPushButton("")
-        self.m_fastForwardButton.setIcon(cut_icon)
-        self.m_fastForwardButton.setIconSize(QSize(12, 12)) # Recommended for clarity
-        self.m_fastForwardButton.setToolTip("Start cutting")
-        self.m_fastForwardButton.clicked.connect(self.fastForwardClicked)
+        self.m_runTrimButton = QPushButton("")
+        self.m_runTrimButton.setIcon(cut_icon)
+        self.m_runTrimButton.setIconSize(QSize(12, 12)) # Recommended for clarity
+        self.m_runTrimButton.setToolTip("Start cutting")
+        self.m_runTrimButton.clicked.connect(self.runTrimClicked)
 
         self.m_volumeSlider = QSlider(Qt.Orientation.Horizontal, self)
         self.m_volumeSlider.setRange(0, 100)
@@ -129,7 +129,7 @@ class PlayerControls(QWidget):
         layout.addWidget(self.m_startTrimButton)
         layout.addWidget(self.m_endTrimButton)
         layout.addWidget(self.m_undoTrimEntryButton)
-        layout.addWidget(self.m_fastForwardButton)
+        layout.addWidget(self.m_runTrimButton)
 
     def state(self):
         return self.m_playerState
@@ -207,8 +207,8 @@ class PlayerControls(QWidget):
         self.forward.emit()
 
     @Slot()
-    def fastForwardClicked(self):
-        self.fastForward.emit()
+    def runTrimClicked(self):
+        self.runTrim.emit()
 
     @Slot()
     def startTrimClicked(self):
