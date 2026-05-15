@@ -17,6 +17,8 @@ from playercontrols import PlayerControls
 from videowidget import VideoWidget
 import subprocess
 import os
+import time
+from math import log10
 from pathlib import Path
 
 MP4 = 'video/mp4'
@@ -278,7 +280,8 @@ class Player(QWidget):
     @Slot()
     def backwardClicked(self):
         current_pos = self.m_player.position()
-        self.m_player.setPosition(current_pos-5000)
+        self.m_player.setPosition(current_pos - 8000)
+        time.sleep(0.02)
 
     @Slot()
     def undoTrimEntryClicked(self):
@@ -316,8 +319,8 @@ class Player(QWidget):
     @Slot()
     def forwardClicked(self):
         current_pos = self.m_player.position()
-        self.m_player.setPosition(current_pos+5000)
-
+        self.m_player.setPosition(current_pos + 8000)
+        time.sleep(0.02)
 
     @Slot()
     def runTrimClicked(self):
@@ -347,6 +350,14 @@ class Player(QWidget):
     @Slot(int)
     def seek(self, mseconds):
         self.m_player.setPosition(mseconds)
+        if mseconds < 1000:
+            time.sleep(0.01)
+        elif mseconds < 10000:
+            time.sleep(0.03)
+        elif mseconds < 100000:
+            time.sleep(0.05)
+        else:
+            time.sleep(0.1)
 
     @Slot(QMediaPlayer.MediaStatus)
     def statusChanged(self, status):
