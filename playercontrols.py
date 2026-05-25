@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
 from PySide6.QtMultimedia import QMediaPlayer, QtAudio
-from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QSizePolicy, QSlider, QStyle,
+from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QVBoxLayout, QSizePolicy, QSlider, QStyle,
                                QToolButton, QPushButton, QWidget)
 from PySide6.QtGui import QPalette, QIcon
 from PySide6.QtCore import qFuzzyCompare, Qt, Signal, Slot, QSize
@@ -19,6 +19,7 @@ class PlayerControls(QWidget):
     undoTrimEntry = Signal()
     forward = Signal()
     runTrim = Signal()
+    reload = Signal()
     startTrim = Signal()        # TODO make a single button alternate start/stop
     endTrim = Signal()
     changeVolume = Signal(float)
@@ -34,36 +35,43 @@ class PlayerControls(QWidget):
 
         self.m_playButton = QToolButton(self)
         self.m_playButton.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self.m_playButton.setIconSize(QSize(32, 32))
         self.m_playButton.setToolTip("Play")
         self.m_playButton.clicked.connect(self.playClicked)
 
         self.m_pauseButton = QToolButton(self)
         self.m_pauseButton.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaPause))
+        self.m_pauseButton.setIconSize(QSize(32, 32))
         self.m_pauseButton.setToolTip("Pause")
         self.m_pauseButton.clicked.connect(self.pauseClicked)
 
         self.m_stopButton = QToolButton(self)
         self.m_stopButton.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaStop))
+        self.m_stopButton.setIconSize(QSize(32, 32))
         self.m_stopButton.setToolTip("Stop")
         self.m_stopButton.clicked.connect(self.stop)
 
         self.m_previousButton = QToolButton(self)
         self.m_previousButton.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaSkipBackward))  # noqa: E501
+        self.m_previousButton.setIconSize(QSize(32, 32))
         self.m_previousButton.setToolTip("Rewind")
         self.m_previousButton.clicked.connect(self.previous)
 
         self.m_muteButton = QToolButton(self)
         self.m_muteButton.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaVolume))
+        self.m_muteButton.setIconSize(QSize(32, 32))
         self.m_muteButton.setToolTip("Mute")
         self.m_muteButton.clicked.connect(self.muteClicked)
 
         self.m_backwardButton = QToolButton(self)
         self.m_backwardButton.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaSeekBackward))
+        self.m_backwardButton.setIconSize(QSize(32, 32))
         self.m_backwardButton.setToolTip("Backward 5s")
         self.m_backwardButton.clicked.connect(self.backwardClicked)
 
         self.m_forwardButton = QToolButton(self)
         self.m_forwardButton.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_MediaSeekForward))
+        self.m_forwardButton.setIconSize(QSize(32, 32))
         self.m_forwardButton.setToolTip("Forward 5s")
         self.m_forwardButton.clicked.connect(self.forwardClicked)
 
@@ -71,7 +79,7 @@ class PlayerControls(QWidget):
         self.m_startTrimButton = QPushButton()
         self.m_startTrimButton.setStyleSheet("background-color:#a7e6d7")
         self.m_startTrimButton.setIcon(start_trim_icon)
-        self.m_startTrimButton.setIconSize(QSize(12, 12)) # Recommended for clarity
+        self.m_startTrimButton.setIconSize(QSize(32, 32)) # Recommended for clarity
         self.m_startTrimButton.setToolTip("Trim starts")
         self.m_startTrimButton.clicked.connect(self.startTrimClicked)
 
@@ -79,23 +87,29 @@ class PlayerControls(QWidget):
         self.m_endTrimButton = QPushButton()
         self.m_endTrimButton.setStyleSheet("background-color:pink")
         self.m_endTrimButton.setIcon(end_trim_icon)
-        self.m_endTrimButton.setIconSize(QSize(12, 12)) # Recommended for clarity
+        self.m_endTrimButton.setIconSize(QSize(32, 32)) # Recommended for clarity
         self.m_endTrimButton.setToolTip("Trim ends")
         self.m_endTrimButton.clicked.connect(self.endTrimClicked)
 
         icon = QIcon("./Icons/edit-undo.png")
         self.m_undoTrimEntryButton = QPushButton("")
         self.m_undoTrimEntryButton.setIcon(icon)
-        self.m_undoTrimEntryButton.setIconSize(QSize(12, 12)) # Recommended for clarity
+        self.m_undoTrimEntryButton.setIconSize(QSize(32, 32)) # Recommended for clarity
         self.m_undoTrimEntryButton.setToolTip("Undo")
         self.m_undoTrimEntryButton.clicked.connect(self.undoTrimEntryClicked)
 
         cut_icon = QIcon("./Icons/edit-cut.png")
         self.m_runTrimButton = QPushButton("")
         self.m_runTrimButton.setIcon(cut_icon)
-        self.m_runTrimButton.setIconSize(QSize(12, 12)) # Recommended for clarity
+        self.m_runTrimButton.setIconSize(QSize(32, 32)) # Recommended for clarity
         self.m_runTrimButton.setToolTip("Start cutting")
         self.m_runTrimButton.clicked.connect(self.runTrimClicked)
+
+        self.m_reloadButton = QToolButton(self)
+        self.m_reloadButton.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
+        self.m_reloadButton.setIconSize(QSize(32, 32)) # Recommended for clarity
+        self.m_reloadButton.setToolTip("Reload stalled media player")
+        self.m_reloadButton.clicked.connect(self.reloadClicked)
 
         self.m_volumeSlider = QSlider(Qt.Orientation.Horizontal, self)
         self.m_volumeSlider.setRange(0, 100)
@@ -115,21 +129,26 @@ class PlayerControls(QWidget):
 
         self._doSetState(QMediaPlayer.PlaybackState.StoppedState, True)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.m_stopButton)
-        layout.addWidget(self.m_previousButton)
-        layout.addWidget(self.m_playButton)
-        layout.addWidget(self.m_muteButton)
-        layout.addWidget(self.m_volumeSlider)
-        layout.addWidget(self.m_rateBox)
-        layout.addWidget(self.m_backwardButton)
-        layout.addWidget(self.m_pauseButton)
-        layout.addWidget(self.m_forwardButton)
-        layout.addWidget(self.m_startTrimButton)
-        layout.addWidget(self.m_endTrimButton)
-        layout.addWidget(self.m_undoTrimEntryButton)
-        layout.addWidget(self.m_runTrimButton)
+        layout = QVBoxLayout(self)
+        c_layout = QHBoxLayout()
+        c_layout.setContentsMargins(0, 0, 0, 0)
+        c_layout.addWidget(self.m_stopButton)
+        c_layout.addWidget(self.m_previousButton)
+        c_layout.addWidget(self.m_playButton)
+        c_layout.addWidget(self.m_muteButton)
+        c_layout.addWidget(self.m_volumeSlider)
+        c_layout.addWidget(self.m_rateBox)
+        layout.addLayout(c_layout)
+        t_layout = QHBoxLayout()
+        t_layout.addWidget(self.m_backwardButton)
+        t_layout.addWidget(self.m_pauseButton)
+        t_layout.addWidget(self.m_forwardButton)
+        t_layout.addWidget(self.m_startTrimButton)
+        t_layout.addWidget(self.m_endTrimButton)
+        t_layout.addWidget(self.m_undoTrimEntryButton)
+        t_layout.addWidget(self.m_runTrimButton)
+        t_layout.addWidget(self.m_reloadButton)
+        layout.addLayout(t_layout)
 
     def state(self):
         return self.m_playerState
@@ -209,6 +228,10 @@ class PlayerControls(QWidget):
     @Slot()
     def runTrimClicked(self):
         self.runTrim.emit()
+
+    @Slot()
+    def reloadClicked(self):
+        self.reload.emit()
 
     @Slot()
     def startTrimClicked(self):

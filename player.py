@@ -7,19 +7,21 @@ from functools import cache
 
 from PySide6.QtMultimedia import (QAudioBufferOutput, QAudioDevice, QAudioOutput, QMediaDevices,
                                   QMediaFormat, QMediaMetaData, QMediaPlayer)
-from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QFileDialog, QGridLayout,
+from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QSpacerItem, QFileDialog, QGridLayout,
                                QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
                                QSizePolicy, QSlider, QVBoxLayout, QWidget)
-from PySide6.QtGui import QCursor, QPixmap
-from PySide6.QtCore import QDir, QLocale, QStandardPaths, QTime, Qt, Signal, Slot
+from PySide6.QtGui import QCursor, QPixmap, QPainter, QPen
+from PySide6.QtCore import QDir, QLocale, QStandardPaths, QTime, QUrl, Qt, Signal, Slot
 
 from playercontrols import PlayerControls
 from videowidget import VideoWidget
 import subprocess
 import os
+import copy
 import time
 from math import log10
 from pathlib import Path
+import ProgressBar
 
 MP4 = 'video/mp4'
 
@@ -66,6 +68,27 @@ def list2text(in_list):
     return out_text
 
 
+def list2pair(in_list):
+    """ convert list into time pair array """
+    out_list = []
+    out_text = ''
+    count = 0
+    for val in in_list:
+        if out_text == '':
+            out_text = second2time(val)
+        else:
+            if out_text[-2:] == "; ":
+                out_text = out_text + second2time(val)
+            else:
+                out_text = out_text + ' - ' + second2time(val)
+        count += 1
+        if count % 2 == 0:
+            out_list.append(out_text)
+            out_text = ''
+
+    return out_list
+
+
 class Player(QWidget):
 
     fullScreenChanged = Signal(bool)
@@ -75,6 +98,7 @@ class Player(QWidget):
         self.lastDir = None
         self.currentVideo = ""
         self.currentVideoDir = ""
+        self.fileUrl = ""
         self.timeTrimList = []
         self.m_statusInfo = ""
         self.m_mediaDevices = QMediaDevices()
@@ -111,14 +135,22 @@ class Player(QWidget):
         hLayout = QHBoxLayout()
 
         self.m_slider = QSlider(Qt.Orientation.Horizontal, self)
+        self.m_slider.setFixedWidth(self.width())
         self.m_slider.setRange(0, self.m_player.duration())
         self.m_slider.sliderMoved.connect(self.seek)
         hLayout.addWidget(self.m_slider)
+        layout.addLayout(hLayout)
 
+        pLayout = QHBoxLayout()
+        self.progress_bar = ProgressBar.CustomProgressBar(self.width())
+        pLayout.addWidget(self.progress_bar)
+        layout.addLayout(pLayout)
+
+        lLayout = QHBoxLayout()
         self.m_labelDuration = QLabel()
         self.m_labelDuration.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        hLayout.addWidget(self.m_labelDuration)
-        layout.addLayout(hLayout)
+        lLayout.addWidget(self.m_labelDuration, alignment=Qt.AlignCenter)
+        layout.addLayout(lLayout)
 
         # controls
         controlLayout = QHBoxLayout()
@@ -144,6 +176,7 @@ class Player(QWidget):
         self.controls.endTrim.connect(self.endTrimClicked)
         self.controls.forward.connect(self.forwardClicked)
         self.controls.runTrim.connect(self.runTrimClicked)
+        self.controls.reload.connect(self.reloadClicked)
         self.controls.changeVolume.connect(self.m_audioOutput.setVolume)
         self.controls.changeMuting.connect(self.m_audioOutput.setMuted)
         self.controls.changeRate.connect(self.m_player.setPlaybackRate)
@@ -170,14 +203,19 @@ class Player(QWidget):
         tracksLayout.addWidget(self.m_trimList, 1, 1)
 
         tracksLayout.setColumnStretch(0,1)
-        tracksLayout.setColumnStretch(1,9)
-
-        self.m_videoTracks = QComboBox(self)
-        self.m_videoTracks.activated.connect(self.selectVideoStream)
-        #tracksLayout.addWidget(QLabel("Video Tracks:"), 1, 0)
-        #tracksLayout.addWidget(self.m_videoTracks, 1, 1)
-
+        tracksLayout.setColumnStretch(1,8)
         layout.addLayout(tracksLayout)
+
+        comboLayout = QGridLayout()
+        self.m_trimTracks = QComboBox(self)
+        #self.m_trimTracks.activated.connect(self.selectVideoStream)
+        comboLayout.addWidget(QLabel("Trim Tracks:"), 0, 0)
+        comboLayout.addWidget(self.m_trimTracks, 0, 1)
+        comboLayout.addWidget(QLabel(''), 0, 2)
+        comboLayout.addWidget(QLabel(''), 0, 3)
+        comboLayout.addWidget(QLabel(''), 0, 4)
+        comboLayout.addWidget(QLabel(''), 0, 5)
+        layout.addLayout(comboLayout)
 
         if not self.isPlayerAvailable():
             QMessageBox.warning(self, "Service not available",
@@ -220,12 +258,13 @@ class Player(QWidget):
         if fileDialog.exec() == QDialog.DialogCode.Accepted:
             fileName = fileDialog.selectedUrls()[0].toString().replace("file://","")
             self.lastDir = fileDialog.directory()
+            self.fileUrl = fileDialog.selectedUrls()[0]
             #fileName = fileDialog.selectedUrls()[0].toString().split('/')
             #self.currentVideo = fileName[len(fileName)-1]
             self.currentVideo = fileName
             self.currentVideoDir = Path(fileDialog.selectedUrls()[0].toString().replace("file://", "")).parent
             self.m_videoFile.setText(self.currentVideo)
-            self.openUrl(fileDialog.selectedUrls()[0])
+            self.openUrl(self.fileUrl)
 
     def openUrl(self, url):
         self.m_player.setSource(url)
@@ -234,6 +273,7 @@ class Player(QWidget):
     def durationChanged(self, duration):
         self.m_duration = duration / 1000
         self.m_slider.setMaximum(duration)
+        self.progress_bar.set_duration(self.m_duration)
 
     @Slot("qlonglong")
     def positionChanged(self, progress):
@@ -315,6 +355,12 @@ class Player(QWidget):
         self.controls.m_endTrimButton.setStyleSheet("background-color:grey")
         self.controls.m_startTrimButton.setEnabled(True)
         self.controls.m_endTrimButton.setEnabled(False)
+        time_trim_list = copy.deepcopy(self.timeTrimList)
+        self.progress_bar.set_progress(time_trim_list)
+        self.m_trimTracks.clear()
+        combo_list = list2pair(self.timeTrimList)
+        print(f"DEBUG {combo_list}")
+        self.m_trimTracks.addItems(combo_list)
 
     @Slot()
     def forwardClicked(self):
@@ -345,6 +391,14 @@ class Player(QWidget):
             os.system("rm trim_window_*.mp4")
             self.timeTrimList = []
             self.m_trimList.setText(list2text(self.timeTrimList))
+
+
+    @Slot()
+    def reloadClicked(self):
+        print(f"Reloading the video")
+        self.m_player.setSource(QUrl())
+        time.sleep(1)
+        self.openUrl(self.fileUrl)
 
 
     @Slot(int)
