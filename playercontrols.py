@@ -101,6 +101,7 @@ class PlayerControls(QWidget):
         cut_icon = QIcon("./Icons/edit-cut.png")
         self.m_runTrimButton = QPushButton("")
         self.m_runTrimButton.setIcon(cut_icon)
+        self.m_runTrimButton.setStyleSheet("background-color:#00ff00")
         self.m_runTrimButton.setIconSize(QSize(32, 32)) # Recommended for clarity
         self.m_runTrimButton.setToolTip("Start cutting")
         self.m_runTrimButton.clicked.connect(self.runTrimClicked)

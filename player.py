@@ -10,7 +10,7 @@ from PySide6.QtMultimedia import (QAudioBufferOutput, QAudioDevice, QAudioOutput
 from PySide6.QtWidgets import (QApplication, QComboBox, QDialog, QSpacerItem, QFileDialog, QGridLayout,
                                QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton,
                                QSizePolicy, QSlider, QVBoxLayout, QWidget)
-from PySide6.QtGui import QCursor, QPixmap, QPainter, QPen
+from PySide6.QtGui import QCursor, QPixmap, QPainter, QPen, QIcon
 from PySide6.QtCore import QDir, QLocale, QStandardPaths, QTime, QUrl, Qt, Signal, Slot
 
 from playercontrols import PlayerControls
@@ -39,7 +39,7 @@ def getSupportedMimeTypes():
 def second2time(in_sec):
     """ convert seconds into HH:MM:SS """
     sec = str(in_sec % 60)
-    min = str(in_sec // 60)
+    min = str((in_sec // 60) % 60)
     hr  = str(in_sec // 3600)
     if len(sec) == 1:
         sec = '0' + sec
@@ -96,11 +96,13 @@ class Player(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.lastDir = None
-        self.currentVideo = ""
+        self.currentVideo = "Open a video..."
         self.currentVideoDir = ""
         self.fileUrl = ""
+        self.outFile = ""
         self.timeTrimList = []
         self.m_statusInfo = ""
+        self.m_videoFormat = ""
         self.m_mediaDevices = QMediaDevices()
         self.m_player = QMediaPlayer(self)
         self.m_audioOutput = QAudioOutput(self)
@@ -197,10 +199,31 @@ class Player(QWidget):
         tracksLayout.addWidget(QLabel("Video File:"), 0, 0)
         self.m_videoFile = QLabel(self.currentVideo)
         tracksLayout.addWidget(self.m_videoFile, 0, 1)
+        self.m_videoFormat = QLabel((""))
+        tracksLayout.addWidget(self.m_videoFormat, 0, 2)
+        trash_icon = QIcon("./Icons/trash.png")
+        self.m_trashButton = QPushButton("")
+        self.m_trashButton.setIcon(trash_icon)
+        self.m_trashButton.setStyleSheet("background-color:#ff0000")
+        self.m_trashButton.setToolTip("Delete opened file...")
+        self.m_trashButton.clicked.connect(self.trashClicked)
+        tracksLayout.addWidget(self.m_trashButton, 0, 3)
+
+        tracksLayout.addWidget(QLabel("Output video:"), 1, 0)
+        self.m_outVideo = QLabel(self.currentVideo)
+        tracksLayout.addWidget(self.m_outVideo, 1, 1)
+        tracksLayout.addWidget(QLabel(""), 1, 2)
+        play_icon = QIcon("./Icons/play.png")
+        self.m_outVideoPlayButton = QPushButton("")
+        self.m_outVideoPlayButton.setIcon(play_icon)
+        self.m_outVideoPlayButton.setStyleSheet("background-color:#008080")
+        self.m_outVideoPlayButton.setToolTip("Play trimmed video file...")
+        self.m_outVideoPlayButton.clicked.connect(self.outVideoPlayClicked)
+        tracksLayout.addWidget(self.m_outVideoPlayButton, 1, 3)
 
         self.m_trimList = QLabel(self)
-        tracksLayout.addWidget(QLabel("Trim List:"), 1, 0)
-        tracksLayout.addWidget(self.m_trimList, 1, 1)
+        tracksLayout.addWidget(QLabel("Trimmed time list:"), 2, 0)
+        tracksLayout.addWidget(self.m_trimList, 2, 1)
 
         tracksLayout.setColumnStretch(0,1)
         tracksLayout.setColumnStretch(1,8)
@@ -211,10 +234,10 @@ class Player(QWidget):
         #self.m_trimTracks.activated.connect(self.selectVideoStream)
         comboLayout.addWidget(QLabel("Trim Tracks:"), 0, 0)
         comboLayout.addWidget(self.m_trimTracks, 0, 1)
-        comboLayout.addWidget(QLabel(''), 0, 2)
-        comboLayout.addWidget(QLabel(''), 0, 3)
-        comboLayout.addWidget(QLabel(''), 0, 4)
-        comboLayout.addWidget(QLabel(''), 0, 5)
+        comboLayout.addWidget(QLabel(''), 0, 2)   # replace with "play" button
+        comboLayout.addWidget(QLabel(''), 0, 3)   # replace with "remove" button
+        comboLayout.addWidget(QLabel(''), 0, 4)   # just a spacer
+        comboLayout.addWidget(QLabel(''), 0, 5)   # just a spacer
         layout.addLayout(comboLayout)
 
         if not self.isPlayerAvailable():
@@ -236,8 +259,26 @@ class Player(QWidget):
         #self.m_audioLevelMeter.closeRequest()
         event.accept()
 
+    def trashClicked(self):
+        reply = QMessageBox.question(
+            self, 
+            "Confirmation Required", 
+            "Are you sure you want to proceed?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No  # The default highlighted button
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            print("User clicked Yes")
+        else:
+            print("User clicked No")
+
+    def outVideoPlayClicked(self):
+        self.openUrl(QUrl.fromLocalFile(self.outFile))
+        self.m_player.play()
+
     @Slot()
-    def _updatePitchCompensation(self):
+    def _upm_audioLevelMeterdatePitchCompensation(self):
         self.m_pitchCompensationButton.setChecked(self.m_player.pitchCompensation())
 
     def isPlayerAvailable(self):
@@ -259,12 +300,19 @@ class Player(QWidget):
             fileName = fileDialog.selectedUrls()[0].toString().replace("file://","")
             self.lastDir = fileDialog.directory()
             self.fileUrl = fileDialog.selectedUrls()[0]
-            #fileName = fileDialog.selectedUrls()[0].toString().split('/')
-            #self.currentVideo = fileName[len(fileName)-1]
             self.currentVideo = fileName
             self.currentVideoDir = Path(fileDialog.selectedUrls()[0].toString().replace("file://", "")).parent
             self.m_videoFile.setText(self.currentVideo)
+            file_name_arr = self.currentVideo.split('/')
+            file_name = file_name_arr[len(file_name_arr)-1]
+            self.outFile = f"{self.currentVideoDir}/join_{file_name}"
+            self.m_outVideo.setText(self.outFile)
             self.openUrl(self.fileUrl)
+            # now clear everything
+            self.timeTrimList = []
+            self.m_trimList.setText('')
+            self.progress_bar.set_progress([])
+            self.m_trimTracks.clear()
 
     def openUrl(self, url):
         self.m_player.setSource(url)
@@ -284,6 +332,12 @@ class Player(QWidget):
     @Slot()
     def metaDataChanged(self):
         metaData = self.m_player.metaData()
+        video_codec = str(metaData.value(QMediaMetaData.Key.VideoCodec))
+        if video_codec == None:
+            video_codec = ''
+        elif '.' in video_codec:
+            video_codec = video_codec.split('.')[1]
+        self.m_videoFormat.setText(str(video_codec))
         artist = metaData.value(QMediaMetaData.Key.AlbumArtist)
         title = metaData.value(QMediaMetaData.Key.Title)
         trackInfo = QApplication.applicationName()
@@ -359,7 +413,6 @@ class Player(QWidget):
         self.progress_bar.set_progress(time_trim_list)
         self.m_trimTracks.clear()
         combo_list = list2pair(self.timeTrimList)
-        print(f"DEBUG {combo_list}")
         self.m_trimTracks.addItems(combo_list)
 
     @Slot()
@@ -374,6 +427,8 @@ class Player(QWidget):
             print(f"ERROR - incomplete trim windows")
             # TODO must create a pop up window to show the error
         else:
+            self.controls.m_runTrimButton.setStyleSheet("background-color:#ffffff")
+            self.controls.m_runTrimButton.setEnabled(False)
             self.m_player.stop()
             file_handle = open('join.list', 'w')
             for win in range(len(self.timeTrimList)//2):
@@ -384,13 +439,12 @@ class Player(QWidget):
                 file_handle.write(f"file {trim_file}\n")
                 os.system(cmd_line)
             file_handle.close()
-            file_name_arr = self.currentVideo.split('/')
-            file_name = file_name_arr[len(file_name_arr)-1]
-            out_file = f"{self.currentVideoDir}/join_{file_name}"
-            os.system(f"ffmpeg -f concat -i join.list -c copy {out_file}")
+            os.system(f"ffmpeg -y -f concat -i join.list -c copy {self.outFile}")
             os.system("rm trim_window_*.mp4")
             self.timeTrimList = []
             self.m_trimList.setText(list2text(self.timeTrimList))
+            self.controls.m_runTrimButton.setEnabled(True)
+            self.controls.m_runTrimButton.setStyleSheet("background-color:#00ff00")
 
 
     @Slot()
